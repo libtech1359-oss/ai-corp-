@@ -206,6 +206,14 @@ const commands = [
         .setMaxValue(50)
     ),
 
+  new SlashCommandBuilder()
+    .setName('shadow')
+    .setDescription('📋 Shadow Trade の仮想売買記録・成績を確認する'),
+
+  new SlashCommandBuilder()
+    .setName('dashboard')
+    .setDescription('🏢 CEOダッシュボード — システム状態・リスク・監査・推奨を一覧表示'),
+
 ].map(cmd => cmd.toJSON());
 
 // ── Discord REST API でコマンドを登録 ──

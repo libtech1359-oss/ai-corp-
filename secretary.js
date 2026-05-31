@@ -58,11 +58,14 @@ CEOへの最終レポートを作成してください。
 
 // ── メイン処理 ─────────────────────────────────────────────
 
-async function handle(instruction, taskId = null) {
+async function handle(instruction, taskId = null, observe = null) {
+  const obs = async (type, data) => { if (observe) await observe(type, data).catch(() => {}); };
   const session = logger.start(instruction, taskId);
   writeLog('secretary', `CEO指示受信: ${instruction}`, taskId);
 
   try {
+    await obs('start', { taskId, instruction });
+
     // Step 1: リアルデータ取得 + 長期記憶を結合
     writeLog('secretary', 'データ取得・記憶参照開始', taskId);
     const t0Data     = Date.now();
@@ -73,6 +76,7 @@ async function handle(instruction, taskId = null) {
       : realData;
     session.dataFetch(fullContext);
     memory.saveMemory('ceo_instruction', instruction);
+    await obs('data', { elapsedMs: Date.now() - t0Data });
 
     // Step 2: タスク分解
     writeLog('secretary', 'タスク分解開始', taskId);
@@ -83,6 +87,7 @@ async function handle(instruction, taskId = null) {
     );
     session.decompose(briefing);
     writeLog('secretary', `タスク分解完了: ${briefing.slice(0, 80)}…`, taskId);
+    await obs('briefing', { briefing, elapsedMs: Date.now() - t0Brief });
 
     taskStore.patch(taskId, {
       secretary: {
@@ -105,6 +110,7 @@ async function handle(instruction, taskId = null) {
         const key = DEPT_KEY[result.dept];
         if (key) taskStore.patch(taskId, { [key]: { content: result.content, elapsedMs } });
 
+        await obs('agent', { dept: result.dept, content: result.content, elapsedMs });
         return result;
       })
     );
@@ -117,6 +123,7 @@ async function handle(instruction, taskId = null) {
     session.agent(devilResult.dept, briefing, devilResult.content, devilElapsed);
     memory.saveMemory(devilResult.dept, devilResult.content.slice(0, 200));
     taskStore.patch(taskId, { devil: { content: devilResult.content, elapsedMs: devilElapsed } });
+    await obs('agent', { dept: devilResult.dept, content: devilResult.content, elapsedMs: devilElapsed });
 
     // 全部署結果（devil含む）
     const allResults = [...results, devilResult];
@@ -130,14 +137,16 @@ async function handle(instruction, taskId = null) {
     const auditResult = await audit.review(briefing, allResults, policiesText);
     session.agent('監査部', briefing, auditResult.content, 0);
     memory.saveMemory('audit', `${auditResult.verdict}: ${auditResult.content.slice(0, 150)}`);
+    const auditElapsed = Date.now() - t0Audit;
 
     taskStore.patch(taskId, {
       audit: {
         content: auditResult.content,
         verdict: auditResult.verdict,
-        elapsedMs: Date.now() - t0Audit,
+        elapsedMs: auditElapsed,
       },
     });
+    await obs('agent', { dept: '監査部', content: auditResult.content, verdict: auditResult.verdict, elapsedMs: auditElapsed });
 
     if (auditResult.verdict === '要見直し') {
       writeError('secretary', new Error(`監査 要見直し: ${auditResult.content.slice(0, 200)}`), taskId);
@@ -169,6 +178,7 @@ async function handle(instruction, taskId = null) {
       completedAt:  new Date().toISOString(),
       decisionId,
     });
+    await obs('done', { taskId });
 
     return report;
 

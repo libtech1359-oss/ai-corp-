@@ -17,11 +17,18 @@ const taskStore  = require('./lib/taskStore');
 //  環境変数
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+const observer    = require('./lib/observer');
+const trader      = require('./agents/trader');
+const shadowBook  = require('./lib/shadowBook');
+
 const {
   DISCORD_TOKEN,
   GAS_URL,
-  CEO_CHANNEL = 'ai秘書',
+  CEO_CHANNEL     = 'ai秘書',
+  OBSERVE_CHANNEL = 'ai-観測',
 } = process.env;
+
+let observeChannel = null;
 
 if (!DISCORD_TOKEN) {
   console.error('❌ DISCORD_TOKEN が .env に未設定');
@@ -441,6 +448,131 @@ async function handleStatus(interaction) {
 //  /events コマンド
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+async function handleDashboard(interaction) {
+  await interaction.deferReply({ flags: 64 });
+
+  // ── データ収集 ──────────────────────────────────────────────
+  const state   = systemState.read();
+  const halted  = state.trading_enabled !== true;
+  const latestTask = taskStore.list(1)[0] || null;
+  const sm      = shadowBook.summary();
+
+  // 今日のイベント数
+  const todayJST = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  const todayEvents = eventLog.read(100).filter(e => e.at?.startsWith(todayJST));
+
+  // 最新タスクからリスクレベル・audit・推奨アクション抽出
+  const riskContent  = latestTask?.risk?.content  || '';
+  const auditContent = latestTask?.audit?.content || '';
+  const auditVerdict = latestTask?.audit?.verdict || '—';
+  const taskDate     = latestTask?.createdAt?.slice(0, 10) || '—';
+
+  // risk: 高/中/低 を抽出
+  const riskLevel = riskContent.match(/リスク評価[：:]\s*(高|中|低)/) ?
+    riskContent.match(/リスク評価[：:]\s*(高|中|低)/)[1] :
+    riskContent.match(/^(高|中|低)/) ? riskContent.match(/^(高|中|低)/)[1] : '—';
+  const riskIcon = { 高: '🔴', 中: '🟡', 低: '🟢' }[riskLevel] || '⚪';
+
+  // 最新 shadow trade
+  const lastTrade = shadowBook.list(1)[0] || null;
+
+  // ── embed 構築 ────────────────────────────────────────────
+  const systemIcon  = halted ? '🛑' : '✅';
+  const systemLabel = halted ? '停止中' : '稼働中';
+  const verdictIcon = { 承認: '✅', '条件付き承認': '🟡', 要見直し: '🔴' }[auditVerdict] || '⚪';
+  const ACTION_ICON = { buy: '🟢 買い', sell: '🔴 売り', hold: '⚪ 様子見' };
+
+  const embed = new EmbedBuilder()
+    .setTitle('🏢 AI Capital — CEO ダッシュボード')
+    .setColor(halted ? 0xff6b8a : auditVerdict === '要見直し' ? 0xffd93d : 0x4ecca3)
+    .setTimestamp()
+    .addFields(
+      {
+        name:   `${systemIcon} システム状態`,
+        value:  `**${systemLabel}**${halted ? `\n理由: \`${state.halt_reason || '—'}\`` : ''}`,
+        inline: true,
+      },
+      {
+        name:   `${riskIcon} リスクレベル`,
+        value:  riskLevel !== '—' ? `**${riskLevel}**` : '（データ未取得）',
+        inline: true,
+      },
+      {
+        name:   `${verdictIcon} 最新監査`,
+        value:  `**${auditVerdict}**\n${taskDate}`,
+        inline: true,
+      },
+      {
+        name:   '📅 今日のイベント',
+        value:  todayEvents.length > 0
+          ? `**${todayEvents.length}件**\n${todayEvents.slice(0, 3).map(e => `\`${e.event}\``).join(' ')}`
+          : '0件',
+        inline: true,
+      },
+      {
+        name:   '📋 Shadow Trade',
+        value:  sm
+          ? `🟢 ${sm.buy} / 🔴 ${sm.sell} / ⚪ ${sm.hold}　合計${sm.total}件`
+          : '記録なし',
+        inline: true,
+      },
+      {
+        name:   '📦 最終タスク',
+        value:  latestTask ? `\`${latestTask.id}\`` : '—',
+        inline: true,
+      },
+    );
+
+  // 推奨アクション（最新 shadow trade から）
+  if (lastTrade) {
+    embed.addFields({
+      name:  '🎯 直近の推奨アクション',
+      value: `${ACTION_ICON[lastTrade.action] || lastTrade.action} | **${lastTrade.fund}** | ¥${lastTrade.amount_yen.toLocaleString()}\n> ${lastTrade.reason}`,
+    });
+  } else {
+    embed.addFields({
+      name:  '🎯 直近の推奨アクション',
+      value: '（まだ記録がありません）',
+    });
+  }
+
+  // 監査コメント（先頭100字）
+  if (auditContent) {
+    embed.addFields({
+      name:  '🔍 監査コメント（抜粋）',
+      value: auditContent.slice(0, 200) + (auditContent.length > 200 ? '…' : ''),
+    });
+  }
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleShadow(interaction) {
+  const sm = shadowBook.summary();
+  if (!sm) {
+    await interaction.reply({ content: '📋 Shadow Trade の記録はまだありません。', flags: 64 });
+    return;
+  }
+
+  const recent = shadowBook.list(5);
+  const ACTION_ICON = { buy: '🟢 買い', sell: '🔴 売り', hold: '⚪ 様子見' };
+
+  const lines = [
+    '**📋 Shadow Trade サマリー**',
+    '',
+    `> 記録開始: ${sm.since}　合計: **${sm.total}件**`,
+    `> 🟢 買い: ${sm.buy}件　🔴 売り: ${sm.sell}件　⚪ 様子見: ${sm.hold}件`,
+    `> 仮想買付合計: **¥${sm.totalBuy.toLocaleString()}**`,
+    '',
+    '**直近5件**',
+    ...recent.map(t =>
+      `\`${t.date}\` ${ACTION_ICON[t.action]} **${t.fund}** ¥${t.amount_yen.toLocaleString()}\n　　> ${t.reason}`
+    ),
+  ];
+
+  await interaction.reply({ content: lines.join('\n').slice(0, 1900), flags: 64 });
+}
+
 async function handleEvents(interaction) {
   const limit  = interaction.options.getInteger('件数') ?? 10;
   const events = eventLog.read(limit);
@@ -552,6 +684,8 @@ const SLASH_HANDLERS = {
   resume:    handleResume,
   status:    handleStatus,
   events:    handleEvents,
+  shadow:    handleShadow,
+  dashboard: handleDashboard,
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -571,7 +705,13 @@ client.once('clientReady', () => {
   console.log(`📡 待機チャンネル: #${CEO_CHANNEL}`);
   client.user.setActivity('📊 投資を監視中', { type: 3 });
   logger.purgeOldLogs(90);
-  scheduler.init(client);
+
+  observeChannel = client.channels.cache.find(
+    c => c.name === OBSERVE_CHANNEL && c.isTextBased()
+  ) || null;
+  if (observeChannel) console.log(`🔭 観測チャンネル: #${OBSERVE_CHANNEL}`);
+
+  scheduler.init(client, observeChannel);
 });
 
 // ── スラッシュコマンド ──
@@ -610,11 +750,30 @@ client.on('messageCreate', async message => {
   await message.react('⏳');
 
   try {
-    const report = await secretary.handle(instruction, taskId);
+    const obs    = observer.make(observeChannel);
+    const report = await secretary.handle(instruction, taskId, obs);
     for (const chunk of splitMessage(report)) {
       await message.channel.send(chunk);
     }
     await message.channel.send(`\`📋 ${taskId}\``);
+    // Shadow Trade: audit 承認時のみ
+    const task    = taskStore.get(taskId);
+    const verdict = task?.audit?.verdict;
+    if (verdict === '承認' || verdict === '条件付き承認') {
+      try {
+        const rec = await trader.recommend(task);
+        if (rec) {
+          const entry = shadowBook.record({ taskId, verdict, ...rec });
+          const ACTION_ICON = { buy: '🟢 買い', sell: '🔴 売り', hold: '⚪ 様子見' };
+          await message.channel.send(
+            `📋 **Shadow Trade** \`${entry.id}\`\n` +
+            `${ACTION_ICON[entry.action]} | **${entry.fund}** | ¥${entry.amount_yen.toLocaleString()}\n` +
+            `> ${entry.reason}`
+          );
+        }
+      } catch (_) {}
+    }
+
     await message.reactions.removeAll();
     await message.react('✅');
   } catch (err) {

@@ -9,6 +9,9 @@ const taskStore               = require('./lib/taskStore');
 const reportWriter            = require('./lib/reportWriter');
 const publisher               = require('./agents/publisher');
 const gitSync                 = require('./lib/gitSync');
+const observer                = require('./lib/observer');
+const trader                  = require('./agents/trader');
+const shadowBook              = require('./lib/shadowBook');
 const { writeLog, writeError } = require('./core/logger');
 
 // ── スケジュール定義 ────────────────────────────────────────
@@ -53,13 +56,15 @@ let crashFiredDate = null; // 同日の二重発火防止
 
 // ── 初期化 ──────────────────────────────────────────────────
 
-let reportChannel = null;
+let reportChannel  = null;
+let observeChannel = null;
 
-async function init(client) {
+async function init(client, extObserveChannel = null) {
   const channelName = process.env.REPORT_CHANNEL || process.env.CEO_CHANNEL || 'ai秘書';
   reportChannel = client.channels.cache.find(
     c => c.name === channelName && c.isTextBased()
   );
+  observeChannel = extObserveChannel;
 
   if (!reportChannel) {
     writeLog('scheduler', `⚠️ レポートチャンネル "${channelName}" が見つかりません。スケジューラー無効。`);
@@ -156,7 +161,8 @@ async function execute(icon, name, instruction, source, reportType = null) {
   lock.lock();
   try {
     await reportChannel.send(`${icon} **${name}**\n\`${taskId}\` 処理中…`);
-    const report = await secretary.handle(instruction, taskId);
+    const obs    = observer.make(observeChannel);
+    const report = await secretary.handle(instruction, taskId, obs);
     for (const chunk of splitMessage(report)) await reportChannel.send(chunk);
 
     if (reportType) {
@@ -184,6 +190,26 @@ async function execute(icon, name, instruction, source, reportType = null) {
       const pushed = gitSync.sync(`${reportType} report`);
       if (pushed) {
         await reportChannel.send(`📦 GitHub に push しました`);
+      }
+    }
+
+    // Shadow Trade: audit 承認時のみ仮想売買を記録
+    const task    = taskStore.get(taskId);
+    const verdict = task?.audit?.verdict;
+    if (verdict === '承認' || verdict === '条件付き承認') {
+      try {
+        const rec = await trader.recommend(task);
+        if (rec) {
+          const entry = shadowBook.record({ taskId, verdict, ...rec });
+          const ACTION_ICON = { buy: '🟢 買い', sell: '🔴 売り', hold: '⚪ 様子見' };
+          await reportChannel.send(
+            `📋 **Shadow Trade** \`${entry.id}\`\n` +
+            `${ACTION_ICON[entry.action]} | **${entry.fund}** | ¥${entry.amount_yen.toLocaleString()}\n` +
+            `> ${entry.reason}`
+          );
+        }
+      } catch (tradeErr) {
+        writeError('scheduler', tradeErr);
       }
     }
 
