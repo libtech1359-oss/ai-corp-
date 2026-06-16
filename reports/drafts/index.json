@@ -1,5 +1,20 @@
 [
   {
+    "id": "2026-06-17_market_meeting_morning",
+    "article_id": "AC-2026-0005",
+    "title": "AI Capital市場会議 #0005",
+    "date": "2026-06-17",
+    "type": "morning",
+    "status": "draft",
+    "market_phase": null,
+    "manager_decision": null,
+    "notePath": "D:\\AI\\ai-corp\\reports\\drafts\\2026-06-17_market_meeting_morning.md",
+    "xPath": "D:\\AI\\ai-corp\\reports\\x_posts\\2026-06-17_market_meeting_morning_x.txt",
+    "archivePath": null,
+    "createdAt": "2026-06-16T22:15:35.373Z",
+    "updatedAt": "2026-06-16T22:15:35.373Z"
+  },
+  {
     "id": "2026-06-16_market_meeting_close",
     "article_id": "AC-2026-0004",
     "title": "AI Capital市場会議（引け後） #0004",
