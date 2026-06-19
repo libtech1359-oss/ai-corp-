@@ -1,5 +1,20 @@
 [
   {
+    "id": "2026-06-19_market_meeting_daily",
+    "article_id": "AC-2026-0003",
+    "title": "AI Capital市場会議 #0003",
+    "date": "2026-06-19",
+    "type": "daily",
+    "status": "draft",
+    "market_phase": null,
+    "manager_decision": null,
+    "notePath": null,
+    "xPath": null,
+    "archivePath": null,
+    "createdAt": "2026-06-19T03:30:50.278Z",
+    "updatedAt": "2026-06-19T03:30:50.278Z"
+  },
+  {
     "id": "2026-06-18_market_meeting_daily",
     "article_id": "AC-2026-0002",
     "title": "AI Capital市場会議 #0002",
