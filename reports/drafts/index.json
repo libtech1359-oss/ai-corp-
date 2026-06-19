@@ -1,5 +1,20 @@
 [
   {
+    "id": "2026-06-19_weekly_report",
+    "article_id": "AC-2026-0004",
+    "title": "AI Capital週次レポート #0004",
+    "date": "2026-06-19",
+    "type": "weekly",
+    "status": "draft",
+    "market_phase": null,
+    "manager_decision": null,
+    "notePath": null,
+    "xPath": null,
+    "archivePath": null,
+    "createdAt": "2026-06-19T07:30:23.024Z",
+    "updatedAt": "2026-06-19T07:30:23.024Z"
+  },
+  {
     "id": "2026-06-19_market_meeting_daily",
     "article_id": "AC-2026-0003",
     "title": "AI Capital市場会議 #0003",
