@@ -1,3 +1,10 @@
+---
+article_id: AC-2026-0003
+title: "AI Capital市場会議 #0003"
+date: 2026-06-19
+status: draft
+type: daily
+---
 # 📊 AI Capital市場会議 #0003
 
 🆔 AC-2026-0003
