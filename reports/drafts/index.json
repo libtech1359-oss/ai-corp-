@@ -1,5 +1,20 @@
 [
   {
+    "id": "2026-06-23_market_meeting_daily",
+    "article_id": "AC-2026-0004",
+    "title": "AI Capital市場会議 #0004",
+    "date": "2026-06-23",
+    "type": "daily",
+    "status": "draft",
+    "market_phase": "NORMAL_BULL",
+    "manager_decision": null,
+    "notePath": "D:\\AI\\ai-corp\\reports\\drafts\\2026-06-23_market_meeting_daily.md",
+    "xPath": "D:\\AI\\ai-corp\\reports\\x_posts\\2026-06-23_market_meeting_daily_x.txt",
+    "archivePath": null,
+    "createdAt": "2026-06-22T19:13:27.101Z",
+    "updatedAt": "2026-06-23T03:40:38.341Z"
+  },
+  {
     "id": "2026-06-22_market_meeting_daily",
     "article_id": "AC-2026-0003",
     "title": "AI Capital市場会議 #0003",
@@ -12,7 +27,7 @@
     "xPath": "D:\\AI\\ai-corp\\reports\\x_posts\\2026-06-22_market_meeting_daily_x.txt",
     "archivePath": null,
     "createdAt": "2026-06-21T15:43:11.087Z",
-    "updatedAt": "2026-06-22T03:18:12.070Z"
+    "updatedAt": "2026-06-22T06:16:49.517Z"
   },
   {
     "id": "2026-06-21_market_meeting_daily",
